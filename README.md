@@ -16,3 +16,13 @@ Ce dépôt est destiné à recueillir les travaux des étudiants dans le cadre d
 4. Faites une Pull Request vers le dépôt principal
 
 ## 📁 Structure recommandée
+/votre_nom/
+├── data/
+├── code/
+├── rapport.Rmd
+└── README.md
+
+
+## 📣 Remarques
+- Merci de ne pas inclure de données sensibles ou personnelles
+- Respectez les droits d’auteur des datasets utilisés
