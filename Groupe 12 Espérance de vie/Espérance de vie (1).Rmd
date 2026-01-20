@@ -1,0 +1,354 @@
+---
+title: "Projet d'analyse de l'expérence de vie"
+output: html_notebook
+---
+
+
+
+
+```{r importations}
+# Lecture du fichier
+data <- read.csv("gapminder_data_graphs.csv")
+
+# Aperçu des premières lignes
+head(data)
+```
+
+
+```{r Matrice du dataset}
+# Affiche (lignes, colonnes)
+dim(data)
+```
+
+```{r type de données}
+str(data)
+```
+
+```{r nettoyage}
+# Calcul du pourcentage de valeurs manquantes par colonne
+missing_pct <- colMeans(is.na(data)) * 100
+
+# Affichage sous forme de tableau propre
+print(missing_pct)
+```
+
+```{r}
+# 1. Calculer le nombre de colonnes totales
+nb_colonnes <- ncol(data)
+
+# 2. Calculer le pourcentage de NA par ligne
+# rowSums(is.na(data)) compte les NA par ligne
+pct_na_ligne <- (rowSums(is.na(data)) / nb_colonnes) * 100
+
+# 3. Filtrer pour ne garder que les lignes <= 5%
+data_nettoyee <- data[pct_na_ligne <= 5, ]
+
+# 4. Vérification
+cat("Lignes avant :", nrow(data), "\n")
+cat("Lignes après :", nrow(data_nettoyee), "\n")
+cat("Lignes supprimées :", nrow(data) - nrow(data_nettoyee), "\n")
+ 
+```
+
+
+```{r Exploration}
+library(skimr)
+# Analyse rapide et complète
+skim(data.frame(data_nettoyee))
+```
+
+```{r}
+
+# 1. CHARGEMENT DES PACKAGES
+# ------------------------------------------------------------------------------
+library(tidyverse)
+library(viridis)
+library(scales)
+library(plotly) 
+library(reshape2)
+library(rnaturalearth) # Pour obtenir les fonds de carte mondiaux
+library(rnaturalearthdata)
+
+
+# 2. PRÉPARATION ET NETTOYAGE DES DONNÉES
+# ------------------------------------------------------------------------------
+raw_data <- read.csv("gapminder_data_graphs.csv")
+
+# Calcul du seuil de nettoyage (5% max de NA par ligne)
+nb_cols <- ncol(raw_data)
+
+data_nettoyee <- raw_data %>%
+  # Filtrage des lignes avec trop de valeurs manquantes
+  filter((rowSums(is.na(.)) / nb_cols) <= 0.05) %>%
+  # Conversion en facteurs pour une meilleure gestion catégorielle
+  mutate(
+    continent = as.factor(continent),
+    country = as.factor(country)
+  )
+
+# 3. DÉFINITION DU THÈME GRAPHIQUE
+# ------------------------------------------------------------------------------
+theme_sumptuous <- function() {
+  theme_minimal(base_size = 12) +
+    theme(
+      plot.title = element_text(face = "bold", size = 14, color = "#2c3e50"),
+      legend.position = "none",
+      panel.grid.major = element_line(color = "#ecf0f1", size = 0.5),
+      strip.background = element_rect(fill = "#34495e", color = NA),
+      strip.text = element_text(color = "white", face = "bold")
+    )
+}
+
+# 4. VISUEL 1 : L'ÉVOLUTION TEMPORELLE INTERACTIVE
+# ------------------------------------------------------------------------------
+data_nettoyee <- data_nettoyee %>%
+  mutate(hover_text_time = paste0(
+    "<b>Pays:</b> ", country,
+    "<br><b>Année:</b> ", year,
+    "<br><b>Espérance de vie:</b> ", round(life_exp, 1), " ans"
+  ))
+
+p1 <- ggplot(data_nettoyee, aes(x = year, y = life_exp, group = country)) +
+  geom_line(aes(color = continent, text = hover_text_time), alpha = 0.3, size = 0.3) +
+  geom_smooth(aes(group = continent, color = continent), method = "loess", se = FALSE, size = 1.5) +
+  facet_wrap(~continent) +
+  scale_color_brewer(palette = "Set1") +
+  labs(title = "Trajectoires de Vie Interactives", x = "Année", y = "Âge") +
+  theme_sumptuous()
+
+fig1 <- ggplotly(p1, tooltip = "text") %>%
+  layout(title = list(text = "<b>Trajectoires de Vie Interactives</b>", y = 0.98))
+
+print(fig1)
+
+
+# 5. VISUEL 2 : DISTRIBUTION DE LA RICHESSE (Violin + Jitter)
+# ------------------------------------------------------------------------------
+data_recent <- data_nettoyee %>% 
+  filter(year == max(year)) %>%
+  mutate(hover_text_rich = paste0(
+    "<b>Pays:</b> ", country,
+    "<br><b>PIB:</b> ", dollar(gdp),
+    "<br><b>Continent:</b> ", continent
+  ))
+
+p2 <- ggplot(data_recent, aes(x = reorder(continent, gdp, FUN = median), y = gdp, fill = continent)) +
+  geom_violin(alpha = 0.4, trim = FALSE, color = NA) +
+  geom_jitter(aes(text = hover_text_rich), width = 0.2, size = 1.5, alpha = 0.7, color = "#2c3e50") +
+  scale_y_log10(labels = dollar_format()) +
+  scale_fill_viridis(discrete = TRUE, option = "D") +
+  coord_flip() +
+  labs(title = "Distribution des Richesses (Dernière année)", x = "", y = "PIB (Log)") +
+  theme_sumptuous()
+
+fig2 <- ggplotly(p2, tooltip = "text") %>%
+  layout(showlegend = FALSE)
+
+print(fig2)
+
+
+# 6. VISUEL 3 : LA BULLE INTERACTIVE (Santé vs Richesse)
+# ------------------------------------------------------------------------------
+data_recent <- data_recent %>%
+  mutate(hover_text_bubble = paste0(
+    "<b>Pays:</b> ", country,
+    "<br><b>PIB:</b> ", dollar(gdp),
+    "<br><b>Espérance:</b> ", life_exp, " ans",
+    "<br><b>CO2:</b> ", round(co2_consump, 2), " tonnes"
+  ))
+
+p3 <- ggplot(data_recent, aes(x = gdp, y = life_exp, fill = continent)) +
+  geom_point(aes(size = co2_consump, text = hover_text_bubble), 
+             shape = 21, color = "white", stroke = 0.2, alpha = 0.8) +
+  scale_x_log10(labels = dollar_format()) +
+  scale_size(range = c(4, 20)) + 
+  scale_fill_manual(values = c("Africa" = "#E74C3C", "Americas" = "#F1C40F", 
+                               "Asia" = "#3498DB", "Europe" = "#2ECC71", 
+                               "Oceania" = "#9B59B6")) +
+  labs(title = "Relation Santé, Richesse et CO2", x = "PIB (Échelle Log)", y = "Espérance de vie") +
+  theme_sumptuous()
+
+fig3 <- ggplotly(p3, tooltip = "text") %>%
+  layout(
+    legend = list(orientation = "h", x = 0.1, y = -0.2)
+  )
+
+print(fig3)
+# 7. NOUVEAU VISUEL 4 : MATRICE DE CORRÉLATION INTERACTIVE
+# ------------------------------------------------------------------------------
+# Sélectionner uniquement les variables numériques pour la corrélation
+vars_num <- data_nettoyee %>%
+  select(life_exp, hdi_index, co2_consump, gdp, services) %>%
+  drop_na()
+
+# Calcul de la matrice de corrélation de Pearson
+cor_matrix <- cor(vars_num, method = "pearson")
+
+# Transformer la matrice en format long pour ggplot2
+cor_melted <- melt(cor_matrix) %>%
+  rename(Var1 = Var1, Var2 = Var2, Correlation = value) %>%
+  mutate(hover_text_cor = paste0(
+    "<b>Variable 1:</b> ", Var1,
+    "<br><b>Variable 2:</b> ", Var2,
+    "<br><b>Corrélation:</b> ", round(Correlation, 3)
+  ))
+
+p4 <- ggplot(cor_melted, aes(x = Var1, y = Var2, fill = Correlation)) +
+  geom_tile(aes(text = hover_text_cor)) +
+  scale_fill_gradient2(low = "#e74c3c", high = "#2ecc71", mid = "#f1c40f", 
+                       midpoint = 0, limit = c(-1,1), space = "Lab", 
+                       name="Pearson\nCorrelation") +
+  labs(title = "Matrice de Corrélation des Indicateurs", x = "", y = "") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1))
+
+fig4 <- ggplotly(p4, tooltip = "text")
+print(fig4)
+
+# 8. NOUVEAU VISUEL 5 : CARTE DU MONDE DES CONTINENTS
+# ------------------------------------------------------------------------------
+# Création d'une carte choroplèthe interactive
+fig5 <- plot_geo(data_recent) %>%
+  add_trace(
+    z = ~as.numeric(continent), # Couleur par continent
+    color = ~continent,
+    colors = "Set1",
+    text = ~paste("Pays:", country, "<br>Continent:", continent, "<br>Espérance de vie:", life_exp),
+    locations = ~country,
+    locationmode = 'country names'
+  ) %>%
+  layout(
+    title = '<b>Vue Mondiale par Continent</b>',
+    geo = list(
+      showframe = FALSE,
+      showcoastlines = TRUE,
+      projection = list(type = 'robinson')
+    )
+  )
+print(fig5)
+cat("Analyse terminée avec data_nettoyee. Les graphiques interactifs sont prêts.")
+```
+
+```{r modèle}
+ 
+
+# 1. CHARGEMENT DES PACKAGES
+# ------------------------------------------------------------------------------
+library(tidyverse)
+library(viridis)
+library(scales)
+library(plotly) 
+library(reshape2)
+library(rnaturalearth)
+library(rnaturalearthdata)
+library(tidymodels) # Framework moderne pour le Machine Learning
+library(broom)      # Pour nettoyer les sorties de modèles
+
+# 2. PRÉPARATION ET NETTOYAGE DES DONNÉES
+# ------------------------------------------------------------------------------
+raw_data <- read.csv("gapminder_data_graphs.csv")
+nb_cols <- ncol(raw_data)
+
+data_nettoyee <- raw_data %>%
+  filter((rowSums(is.na(.)) / nb_cols) <= 0.05) %>%
+  mutate(
+    continent = as.factor(continent),
+    country = as.factor(country)
+  ) %>%
+  drop_na(life_exp, gdp, hdi_index) # On assure l'absence de NA pour le modèle
+
+# ------------------------------------------------------------------------------
+# 10. CONSTRUCTION DU MODÈLE DE RÉGRESSION LINÉAIRE
+# ------------------------------------------------------------------------------
+
+# A. Division des données (Split Train/Test)
+set.seed(123) 
+data_split <- initial_split(data_nettoyee, prop = 0.80, strata = continent)
+train_data <- training(data_split)
+test_data  <- testing(data_split)
+
+# B. Définition de la recette (Variables explicatives)
+# Variables : gdp (log), hdi_index, continent
+life_exp_recipe <- recipe(life_exp ~ gdp + hdi_index + continent, data = train_data) %>%
+  step_log(gdp, base = 10) %>% 
+  step_dummy(all_nominal_predictors()) 
+
+# C. Spécification du modèle
+lm_spec <- linear_reg() %>% 
+  set_engine("lm")
+
+# D. Création du Workflow et Entraînement
+workflow_lm <- workflow() %>%
+  add_recipe(life_exp_recipe) %>%
+  add_model(lm_spec)
+
+model_fit <- workflow_lm %>% fit(data = train_data)
+
+# E. LISTE DES VARIABLES ET SIGNIFACTION STATISTIQUE
+# ------------------------------------------------------------------------------
+cat("\n--- SYNTHÈSE DES VARIABLES EXPLICATIVES ---\n")
+model_summary <- model_fit %>% 
+  extract_fit_parsnip() %>% 
+  tidy()
+
+print(model_summary)
+
+# ------------------------------------------------------------------------------
+# 11. ÉVALUATION ET ANALYSE DES ERREURS (RÉSIDUS)
+# ------------------------------------------------------------------------------
+
+# Prédictions sur le jeu de test
+results <- test_data %>%
+  bind_cols(predict(model_fit, new_data = test_data)) %>%
+  rename(pred_life_exp = .pred) %>%
+  mutate(residu = life_exp - pred_life_exp) # Erreur de prédiction
+
+# Identification des erreurs majeures (équivalent des cas problématiques)
+erreurs_majeures <- results %>%
+  mutate(type_erreur = ifelse(residu > 0, "Sous-estimé", "Surestimé")) %>%
+  filter(abs(residu) > 5) # On regarde les erreurs de plus de 5 ans
+
+# Calcul des métriques
+metrics <- results %>% metrics(truth = life_exp, estimate = pred_life_exp)
+
+# Graphique : Distribution des résidus (Analyse de la précision)
+p_residus <- ggplot(results, aes(x = residu)) +
+  geom_histogram(bins = 30, fill = "#3498db", color = "white") +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "red") +
+  labs(
+    title = "Distribution des erreurs de prédiction (Résidus)",
+    subtitle = "Une courbe centrée sur 0 indique un modèle non biaisé",
+    x = "Erreur (Réel - Prédit)",
+    y = "Nombre de pays"
+  ) +
+  theme_minimal()
+
+fig_residus <- ggplotly(p_residus)
+
+# Graphique : Valeurs Réelles vs Prédictions
+p_reg <- ggplot(results, aes(x = life_exp, y = pred_life_exp, color = continent)) +
+  geom_point(aes(text = paste("Pays:", country, "<br>Erreur:", round(residu, 2))), alpha = 0.6) +
+  geom_abline(lty = 2, color = "red") + 
+  labs(
+    title = "Performance : Réel vs Prédit",
+    subtitle = paste("R² =", round(metrics$.estimate[2], 3)),
+    x = "Espérance de vie réelle",
+    y = "Espérance de vie prédite"
+  ) +
+  theme_minimal() +
+  scale_color_viridis_d()
+
+fig_reg <- ggplotly(p_reg)
+
+# 12. AFFICHAGE FINAL
+# ------------------------------------------------------------------------------
+print(fig_reg)
+print(fig_residus)
+
+cat("\n--- PERFORMANCES DU MODÈLE ---\n")
+print(metrics)
+
+cat("\nNote : En régression, les 'Faux Positifs/Négatifs' correspondent aux 'Surestimations/Sous-estimations'.\n")
+cat("Le modèle explique", round(metrics$.estimate[2]*100, 1), "% de la variance.\n")
+```
+

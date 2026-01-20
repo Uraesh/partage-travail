@@ -1,0 +1,516 @@
+---
+title: "Analyse des Performances des Étudiants"
+author: "Ton Nom"
+date: "`r Sys.Date()`"
+output: html_document
+---
+```{r}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+library(dplyr)
+library(ggplot2)
+library(broom)
+library(purrr)
+library(tidyr)
+library(tibble)
+```
+1. Importation et Nettoyage des Données
+```{r}
+# Importations des données
+
+library(readr)
+
+students <- read_csv("StudentsPerformance.csv")
+
+# structure des data
+str(students)
+
+
+# Afficher les premières lignes
+head(students)
+
+# Vérifier les dimensions
+dim(students)
+
+# Nettoyage des données
+# Vérifier les valeurs manquantes
+colSums(is.na(students))
+
+sum(duplicated(students))
+
+names(students)
+
+# Convertir les colonnes catégorielles en facteurs
+library(dplyr)
+students <- students %>%
+  mutate(
+    gender = as.factor(gender),
+    `race/ethnicity` = as.factor(`race/ethnicity`),
+    `parental level of education` = as.factor(`parental level of education`),
+    lunch = as.factor(lunch),
+    `test preparation course` = as.factor(`test preparation course`)
+  )
+# Renommer les colonnes
+students <- students %>%
+  rename(
+    race_ethnicity = `race/ethnicity`,
+    parental_education = `parental level of education`,
+    test_prep = `test preparation course`,
+    math_score = `math score`,
+    reading_score = `reading score`,
+    writing_score = `writing score`
+  )
+
+# Créer un score total et une moyenne
+students <- students %>%
+  mutate(
+    total_score = math_score + reading_score + writing_score,
+    average_score = total_score / 3
+  )
+```
+Préparation et Nettoyage des Données
+
+Le jeu de données StudentsPerformance.csv contient 1000 observations et 8 variables. Il regroupe des informations sur le sexe des élèves, leur origine ethnique, le niveau d’éducation des parents, le type de repas, la participation à un cours de préparation, ainsi que leurs scores en mathématiques, lecture et écriture.
+
+Une première exploration a permis de vérifier la structure du tableau, d’afficher les premières lignes et de confirmer ses dimensions. Les contrôles de qualité montrent qu’il n’existe ni valeurs manquantes ni doublons, ce qui garantit la fiabilité du jeu de données.
+Les variables qualitatives (sexe, origine, niveau d’éducation des parents, type de repas, préparation au test) ont été converties en facteurs, afin de faciliter les analyses statistiques et graphiques. Les noms de colonnes ont ensuite été simplifiés pour éviter les espaces et rendre la manipulation plus fluide (par exemple race_ethnicity au lieu de race/ethnicity).
+
+Deux nouvelles variables ont été créées:
+
+- total_score, qui correspond à la somme des trois notes (mathématiques, lecture, écriture).
+- average_score, qui représente la moyenne de ces trois scores et constitue un indicateur global de performance académique.
+
+
+2. Visualisations
+
+```{r}
+#Visualisation
+library(dplyr)
+library(ggplot2)
+
+# Histogramme des scores moyens
+ggplot(students, aes(x = average_score)) +
+  geom_histogram(binwidth = 5, fill = "skyblue", color = "black") +
+  labs(title = "Distribution des Scores Moyens", x = "Score Moyen", y = "Fréquence") +
+  theme_minimal()
+
+# Boxplot par genre
+ggplot(students, aes(x = gender, y = average_score, fill = gender)) +
+  geom_boxplot() +
+  labs(title = "Comparaison des Scores Moyens par Genre", 
+       x = "Genre", y = "Score Moyen") +
+  theme_minimal()
+
+# Relation entre les différents scores
+pairs(students %>% select(math_score, reading_score, writing_score))
+
+# l'impact du niveau d'éducation des parents
+# Visualisation par catégorie
+
+ggplot(students, aes(x = parental_education, y = average_score, fill = parental_education)) +
+  geom_boxplot() +
+  labs(title = "Scores selon le Niveau d'Éducation des Parents",
+       x = "Niveau d'Éducation", y = "Score Moyen") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+Visualisation des Données et interpretation 
+
+Distribution des Scores Moyens
+
+Le graphique en histogramme montre que la majorité des élèves ont un score moyen situé entre 70 et 75. La distribution est centrée et symétrique, ce qui suggère une répartition relativement normale des performances. Peu d’élèves ont des scores très faibles ou très élevés, ce qui indique une concentration autour de la moyenne.
+
+Comparaison des Scores Moyens par Genre
+
+Le boxplot compare les scores moyens entre les élèves féminins et masculins.
+- Les filles ont une médiane plus élevée (environ 75) et une dispersion légèrement plus large.
+- Les garçons ont une médiane autour de 70, avec une variabilité similaire.
+- Quelques outliers sont visibles, surtout chez les filles, ce qui montre des cas de performances très faibles.
+Ce qui suggère que les filles ont tendance à obtenir des scores moyens légèrement supérieurs à ceux des garçons.
+
+Corrélations entre les Scores
+
+La matrice de scatter plots révèle des corrélations positives fortes entre les scores en mathématiques, lecture et écriture.
+- Les élèves qui réussissent dans une matière ont généralement de bons résultats dans les autres.
+- Cela indique une cohérence des performances académiques entre les disciplines.
+
+Scores selon le Niveau d’Éducation des Parents
+
+Le boxplot montre que les élèves dont les parents ont un niveau d’éducation plus élevé (master’s ou bachelor’s degree) ont tendance à obtenir des scores moyens plus élevés.
+- Les médianes les plus hautes sont associées aux diplômes universitaires.
+- Les élèves dont les parents ont un niveau d’éducation plus faible (high school ou some high school) présentent des scores plus bas et plus de variabilité.
+Le niveau d’éducation parental a un impact sur la performance scolaire des enfants.
+
+
+
+3. Statistiques Descriptives
+
+```{r}
+#Analyse statistique
+
+# STATISTIQUES DESCRIPTIVES GLOBALES
+
+# Résumé des scores
+score_summary <- students %>%
+  summarise(
+    Observations = n(),
+    `Moyenne Math` = round(mean(math_score), 1),
+    `Moyenne Lecture` = round(mean(reading_score), 1),
+    `Moyenne Écriture` = round(mean(writing_score), 1),
+    `Moyenne Totale` = round(mean(total_score), 1),
+    `Écart-type Total` = round(sd(total_score), 1),
+    `Minimum Total` = min(total_score),
+    `Maximum Total` = max(total_score)
+  )
+
+print(score_summary)
+
+score_summary %>%
+  select(`Moyenne Totale`, `Écart-type Total`, `Minimum Total`, `Maximum Total`)
+
+```
+Analyse Statistique des Scores
+
+Le tableau statistique présente les principales mesures descriptives des performances des élèves sur les trois matières évaluées : mathématiques, lecture et écriture.
+Les moyennes par matière sont les suivantes :
+
+. Mathématiques : 66,1
+. Lecture : 69,2
+. Écriture : 68,1
+
+La moyenne totale (somme des trois scores) est de 203,3 points.
+L’écart-type total est de 42,8, ce qui indique une variabilité modérée des scores globaux entre les élèves.
+Le score total minimum observé est de 27, tandis que le maximum atteint 300, soit le score parfait.
+
+les résultats montre que la majorité des élèves obtiennent des scores moyens autour de 65 à 70 par matière, avec une dispersion notable. La présence d’un score total aussi bas que 27 montre qu’il y'a des eleve en difficulte , tandis que le score maximal indique que certains élèves ont excellé dans toutes les matières.
+
+
+. Tests d’Hypothèses
+```{r}
+#test d'hypothese
+
+#diff entre genre
+test_genre <- t.test(average_score ~ gender, data = students)
+print(test_genre)
+
+# Visualisation correspondante
+ggplot(students, aes(x = gender, y = average_score, fill = gender)) +
+  geom_boxplot() +
+  labs(title = "Scores moyens par genre",
+       subtitle = paste("p-value =", format.pval(test_genre$p.value, digits = 3)),
+       x = "Genre", y = "Score moyen") +
+  theme_minimal()
+
+#impact de la prepa au test
+
+t_test_prep <- t.test(average_score ~ test_prep, data = students)
+print(t_test_prep)
+
+# Visualisation correspondante
+ggplot(students, aes(x = test_prep, y = average_score, fill = test_prep)) +
+  geom_boxplot() +
+  labs(title = "Impact de la préparation au test",
+       subtitle = paste("p-value =", format.pval(t_test_prep$p.value, digits = 3)),
+       x = "Préparation au test", y = "Score moyen") +
+  theme_minimal()
+
+# Impact de l'éducation parentale
+anova_parent <- aov(average_score ~ parental_education, data = students)
+summary(anova_parent)
+
+# Visualisation correspondante
+ggplot(students, aes(x = parental_education, y = average_score, fill = parental_education)) +
+  geom_boxplot() +
+  labs(title = "Impact de l'éducation parentale",
+       subtitle = paste("ANOVA p-value =", 
+                        format.pval(summary(anova_parent)[[1]][["Pr(>F)"]][1], digits = 3)),
+       x = "Niveau d'éducation des parents", y = "Score moyen") +
+  theme_minimal()
+
+# Calcul des moyennes et intervalles de confiance par niveau d'éducation parentale
+
+library(dplyr)
+
+parent_means <- students %>%
+  group_by(parental_education) %>%
+  summarise(
+    Moyenne = mean(average_score),
+    IC_inf = mean(average_score) - qt(0.975, df = n()-1) * sd(average_score)/sqrt(n()),
+    IC_sup = mean(average_score) + qt(0.975, df = n()-1) * sd(average_score)/sqrt(n()),
+    .groups = "drop"
+  )
+
+print(parent_means)
+
+# Barplot avec intervalles de confiance
+ggplot(parent_means, aes(x = parental_education, y = Moyenne, fill = parental_education)) +
+  geom_col(alpha = 0.7) +
+  geom_errorbar(aes(ymin = IC_inf, ymax = IC_sup), width = 0.2) +
+  labs(title = "Scores moyens selon l'éducation parentale",
+       subtitle = "Barplot avec intervalles de confiance (95%)",
+       x = "Niveau d'éducation des parents", y = "Score moyen") +
+  theme_minimal() +
+  theme(legend.position = "none")
+```
+Analyse des Hypothèses Statistiques
+
+Différence de scores moyens selon le genre
+
+Le test montre une différence significative entre les scores moyens des filles et des garçons (t = 4.18, p < 0.001).
+Les filles obtiennent en moyenne 69,6 points, contre 65,8 points pour les garçons.
+
+L’intervalle de confiance à 95 % [1,98 ; 5,48] confirme que cette différence est statistiquement robuste.
+
+ Interprétation : Les filles tendent à obtenir des scores moyens plus élevés que les garçons.
+ 
+Effet de la préparation au test
+
+Le test montre une différence très significative entre les élèves ayant suivi un cours de préparation et ceux qui ne l’ont pas fait (t = 8.59, p < 0.001).
+- Moyenne avec préparation : 72,7 points.
+- Moyenne sans préparation : 65,0 points.
+- Intervalle de confiance [5,89 ; 9,37].
+
+Interprétation : La préparation au test a un effet positif marqué sur les performances scolaires.
+
+Influence du niveau d’éducation des parents
+
+L’ANOVA indique que le niveau d’éducation parental a un effet significatif sur les scores (F = 10.75, p < 0.001).
+
+Les moyennes varient selon le diplôme :
+Master’s degree : 73,6
+Bachelor’s degree : 71,9
+Associate’s degree : 69,6
+Some college : 68,5
+Some high school : 65,1
+High school : 63,1
+
+Interprétation : Plus le niveau d’éducation des parents est élevé, plus les scores moyens des élèves sont importants. Cela suggère une influence notable du contexte familial sur la réussite scolaire.
+
+
+
+. Corrélations
+
+```{r}
+ #Matrice de corrélation
+ 
+ cor_matrix <- cor(students %>% 
+                     select(math_score, reading_score, writing_score))
+ cor_matrix
+ 
+ # Visualisation de la corrélation
+ 
+ library(tidyr)
+ library(tibble)
+ 
+ 
+ melted_cor <- cor_matrix %>%
+   as.data.frame() %>%
+   rownames_to_column("Var1") %>%
+   pivot_longer(-Var1, names_to = "Var2", values_to = "value")
+ 
+ ggplot(melted_cor, aes(Var1, Var2, fill = value)) +
+   geom_tile() +
+   scale_fill_gradient2(low = "blue", high = "skyblue", mid = "white", midpoint = 0) +
+   geom_text(aes(label = round(value, 2))) +
+   labs(title = "Matrice de Corrélation entre les Scores") +
+   theme_minimal()
+```
+Corrélation entre les Scores
+
+Ces coefficients indiquent des corrélations fortes entre toutes les paires de variables. En particulier, la relation entre lecture et écriture est très étroite (r = 0.95), ce qui suggère que les compétences verbales sont fortement liées.
+
+Interprétation :
+
+Les élèves qui réussissent dans une matière ont tendance à bien performer dans les autres. Cela reflète une cohérence globale des compétences académiques, et justifie l’utilisation d’un score moyen comme indicateur synthétique de performance.
+
+
+
+4. Modélisation Linéaire
+
+#Modele 1
+
+```{r}
+#Modélisation simple
+ 
+ # Régression linéaire
+ 
+ library(broom)
+ 
+ #Modèle 1 : Lecture et écriture
+ 
+ model1 <- lm(math_score ~ reading_score + writing_score, data = students)
+ tidy(model1)
+ glance(model1)
+ 
+ 
+ 
+ 
+ 
+```
+
+Résultats du modèle
+
+- Intercept : 7,52
+
+C’est la valeur prédite du score moyen lorsque les scores en lecture et écriture sont nuls (interprétation théorique).
+
+Lecture (reading_score) : 0,60
+
+Chaque point supplémentaire en lecture augmente le score moyen de 0,60 point, toutes choses égales par ailleurs.
+
+Écriture (writing_score) : 0,25
+
+Chaque point supplémentaire en écriture augmente le score moyen de 0,25 point, toutes choses égales par ailleurs.
+
+Significativité des variables
+
+Toutes les variables sont statistiquement significatives :
+Lecture : p-value = 1.08e-20
+Écriture : p-value = 4.14e-05
+Cela signifie que les deux scores ont un effet réel et mesurable sur le score moyen.
+
+Qualité du modèle
+R² = 0,674
+Le modèle explique 67,4 % de la variance du score moyen.
+R² ajusté = 0,673
+Ce score confirme la robustesse du modèle en tenant compte du nombre de variables.
+Statistique F = 1030,55, p-value = 2.25e-243
+Le modèle global est hautement significatif.
+
+
+Interprétation
+
+Ce modèle montre que les performances en lecture et en écriture sont de bons prédicteurs du score moyen expliquant près de 67 % de la variance.
+L’effet de la lecture est plus fort que celui de l’écriture, ce qui suggère que les compétences de compréhension ont un impact plus marqué sur la performance globale
+
+
+# Modele 2
+
+```{r}
+library(broom)
+ 
+ #Modèle 2 : ajout du genre et la preparaion au test
+ 
+ model2 <- lm(math_score ~ reading_score + writing_score + gender + test_prep, data = students)
+ tidy(model2)
+ glance(model2)
+ 
+ 
+```
+Résultats principaux
+
+Lecture (reading_score) : chaque point supplémentaire augmente le score moyen de 0,30 (p < 2.5e-11).
+Écriture (writing_score) : chaque point supplémentaire augmente le score moyen de 0,70 (p < 4.2e-50).
+Genre (male) : être un garçon augmente le score moyen de 13,63 points par rapport aux filles (p < 7.8e-171).
+Préparation au test (none) : ne pas avoir suivi de préparation réduit la performance, avec une différence de 3,58 points (p < 5.1e-17).
+
+Qualité du modèle
+
+R² = 0,851 (R² ajusté = 0,851) : le modèle explique 85 % de la variance des scores moyens.
+Statistique F = 1426,3, p-value = 0 > le modèle est globalement très significatif.
+
+Interprétation
+
+le deuxième modèle est plus performant que le premier (R² plus élevé). Il montre que :
+
+Les scores en lecture et écriture restent des prédicteurs solides, avec un effet plus marqué de l’écriture.
+Le genre joue un rôle majeur, les garçons ayant en moyenne des scores plus élevés.
+La préparation au test améliore significativement les résultats.
+
+Ce modèle met en évidence l’importance combinée des compétences académiques (lecture, écriture) et des facteurs contextuels (genre, préparation) dans la prédiction des performances scolaires, expliquant une très grande part de la variabilité observée.
+
+
+
+#Modele 3
+
+```{r}
+library(broom)
+#Modèle 3 : Ajout de l’éducation parentale
+ 
+ model3 <- lm(math_score ~ reading_score + writing_score + gender + test_prep + parental_education, data = students)
+ tidy(model3)
+ glance(model3)
+```
+
+Interpretation
+
+Le modèle 3 est robuste et met en évidence que les performances scolaires dépendent surtout des compétences académiques, du genre et de la préparation au test, tandis que l’effet du niveau d’éducation des parents est plus limité et parfois inattendu.
+
+
+.Comparaison des modeles
+
+```{r}
+# Comparaison des modèles
+ 
+ library(purrr)
+ 
+ model_comparison <- list(model1 = model1, model2 = model2, model3 = model3) %>%
+   map_df(glance, .id = "model")
+ 
+ model_comparison %>%
+   select(model, r.squared, adj.r.squared, AIC, BIC, sigma, df.residual)
+ 
+ model_comparison %>%
+   ggplot(aes(x = model, y = r.squared, fill = model)) +
+   geom_col() +
+   labs(title = "Comparaison des R² des modèles",
+        x = "Modèle", y = "R²") +
+   theme_minimal()
+ 
+```
+Comparaison des Trois Modèles
+
+Le graphique comparatif des R² montre clairement l’évolution de la qualité prédictive des modèles :
+
+Modèle 1 (lecture + écriture) : R² ≈ 0,67
+Ce modèle de base explique une part correcte de la variance, mais reste limité aux compétences académiques.
+
+Modèle 2 (+ genre + préparation au test) : R² ≈ 0,85
+L’ajout de variables contextuelles améliore fortement la performance du modèle. Le genre et la préparation au test ont un impact significatif sur les scores.
+
+Modèle 3 (+ éducation des parents) : R² ≈ 0,85
+L’ajout du niveau d’éducation des parents n’améliore pas significativement le pouvoir explicatif par rapport au modèle 2. Certains niveaux ont un effet faible ou non significatif
+
+
+
+.Comparaison des residus
+
+```{r}
+#comparaison resudis des 3 modele
+ 
+ bind_rows(
+   augment(model1) %>% mutate(model = "Modèle 1"),
+   augment(model2) %>% mutate(model = "Modèle 2"),
+   augment(model3) %>% mutate(model = "Modèle 3")
+ ) %>%
+   ggplot(aes(x = .resid, fill = model)) +
+   geom_histogram(alpha = 0.6, bins = 30, position = "identity") +
+   labs(title = "Distribution des résidus par modèle",
+        x = "Résidus", y = "Fréquence") +
+   theme_minimal()
+ 
+```
+Analyse des Résidus par Modèle
+
+Le graphique montre la distribution des résidus pour les trois modèles testés :
+
+Les résidus des modèles 2 et 3 (en vert et bleu) sont plus concentrés autour de zéro, avec une dispersion plus faible, ce qui indique une meilleure précision des prédictions.
+Le modèle 1 (en rouge) présente une distribution plus étalée, ce qui reflète une erreur de prédiction plus élevée.
+
+Interprétation
+Les modèles 2 et 3 sont plus performants, avec des résidus plus faibles et mieux répartis.
+
+le modèle 1 est moins précis, ce qui confirme qu’ajouter des variables explicatives (genre, préparation, éducation parentale) améliore la qualité des prédictions.
+
+
+
+.Verification des residus
+
+```{r}
+ #verification des residus
+ 
+ qqnorm(resid(model1)); qqline(resid(model1))
+ qqnorm(resid(model2)); qqline(resid(model2))
+ qqnorm(resid(model3)); qqline(resid(model3))
+```
+
