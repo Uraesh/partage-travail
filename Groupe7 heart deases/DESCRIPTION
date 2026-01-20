@@ -1,0 +1,16 @@
+Package: heart-deases
+Type: Shiny
+Title: CardioPredict AI
+Version: 0.1.0
+Author: Yusuke
+Description: Application Shiny pour prédiction cardio.
+Imports:
+    shiny,
+    shinydashboard,
+    caret,
+    randomForest,
+    ggplot2,
+    dplyr,
+    dt,
+    plotly,
+    iml

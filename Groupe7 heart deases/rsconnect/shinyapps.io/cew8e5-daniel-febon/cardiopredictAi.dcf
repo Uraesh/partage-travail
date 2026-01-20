@@ -1,0 +1,12 @@
+name: cardiopredictAi
+title: cardiopredictAi
+username: cew8e5-daniel-febon
+account: cew8e5-daniel-febon
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 16406942
+bundleId:
+url: https://cew8e5-daniel-febon.shinyapps.io/cardiopredictAi/
+version: 1
+asMultiple: FALSE
+asStatic: FALSE

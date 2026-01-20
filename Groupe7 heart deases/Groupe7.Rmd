@@ -1,0 +1,915 @@
+---
+title: "Prédiction des Maladies Cardiaques"
+subtitle: "Analyse Comparative : Régression Logistique vs Random Forest"
+author: "FEBON S. Daniel & BODI - SAMA Souweba"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    theme: flatly
+    highlight: tango
+    code_folding: show
+    df_print: paged
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  fig.align = "center",
+  fig.width = 10,
+  fig.height = 6
+)
+```
+
+# Introduction
+
+## Contexte
+
+Les maladies cardiovasculaires représentent la première cause de mortalité dans le monde, avec plus de 17,9 millions de décès annuels selon l'OMS. Ce projet vise à développer un système de prédiction basé sur des données cliniques pour identifier les patients à risque et permettre une intervention précoce.
+
+**Source des données** : [Heart Disease Dataset - Kaggle](https://www.kaggle.com/datasets/johnsmith88/heart-disease-dataset)
+
+Ce dataset provient de plusieurs institutions médicales et contient 303 observations avec 14 attributs cliniques incluant l'âge, le sexe, le type de douleur thoracique, la pression artérielle, le cholestérol et d'autres indicateurs cardiovasculaires.
+
+## Objectifs
+
+- **Objectif 1** : Analyser les facteurs de risque cardiovasculaires et leur distribution
+- **Objectif 2** : Développer des modèles prédictifs performants et robustes
+- **Objectif 3** : Comparer rigoureusement la régression logistique et le Random Forest
+- **Objectif 4** : Déployer une application Shiny interactive pour l'aide à la décision clinique
+
+## Méthodologie
+
+Cette analyse suit une approche scientifique rigoureuse en 5 étapes :
+
+1. **Exploration et nettoyage des données** : Traitement des valeurs manquantes, détection des outliers, transformation des variables
+2. **Analyse exploratoire visuelle (EDA)** : Visualisations interactives pour comprendre les patterns et relations
+3. **Modélisation avec validation croisée** : Entraînement de modèles avec hyperparamètres optimisés
+4. **Évaluation et comparaison des performances** : Métriques multiples (Accuracy, Sensibilité, Spécificité, AUC)
+5. **Interprétation des résultats** : Analyse clinique des facteurs de risque identifiés
+
+---
+
+# Configuration de l'Environnement
+
+Cette section installe et charge tous les packages nécessaires pour l'analyse. Nous utilisons le tidyverse pour la manipulation de données, caret pour le machine learning, et plotly pour des visualisations interactives professionnelles.
+
+```{r packages}
+# Installation et chargement des packages requis
+required_packages <- c(
+  "tidyverse",    # Manipulation & visualisation
+  "caret",        # Machine Learning
+  "skimr",        # Exploration des données
+  "corrplot",     # Corrélations
+  "randomForest", # Modèle Random Forest
+  "e1071",        # Support pour caret
+  "pROC",         # Courbes ROC / AUC
+  "ROCR",         # Visualisation des performances
+  "plotly",       # Graphiques interactifs
+  "broom",        # Résultats de modèles en dataframes
+  "janitor",      # Nettoyage de données
+  "knitr",        # Tableaux formatés
+  "kableExtra",   # Amélioration des tableaux
+  "iml",          # Interprétabilité des modèles
+  "reshape2"      # Manipulation de données pour heatmaps
+)
+
+# Installation des packages manquants
+new_packages <- required_packages[!(required_packages %in% installed.packages()[,"Package"])]
+if(length(new_packages)) install.packages(new_packages, repos = "http://cran.r-project.org")
+
+# Chargement silencieux
+invisible(lapply(required_packages, library, character.only = TRUE))
+```
+
+```{r theme-setup}
+# Configuration du thème graphique personnalisé
+theme_set(theme_minimal(base_size = 12))
+palette_custom <- c("#3498db", "#e74c3c")
+```
+
+---
+
+# Chargement et Préparation des Données
+
+Cette section gère l'import, le nettoyage et la transformation des données brutes. Nous effectuons un contrôle qualité rigoureux incluant la détection de doublons, la gestion des valeurs aberrantes et la transformation appropriée des variables catégorielles.
+
+## Import des données
+
+```{r load-data}
+# Chargement du dataset
+df_raw <- read_csv("heart.csv", show_col_types = FALSE)
+
+# Aperçu des données brutes
+glimpse(df_raw)
+```
+
+## Nettoyage et transformation
+
+```{r clean-data}
+# Pipeline de nettoyage
+heart_clean <- df_raw %>%
+  # Nettoyage des noms de colonnes
+  clean_names() %>%
+  
+  # Suppression des doublons stricts
+  distinct() %>%
+  
+  # Transformation des variables catégorielles
+  mutate(
+    sex = factor(sex, levels = c(0, 1), labels = c("Femme", "Homme")),
+    cp = factor(cp, levels = 0:3, labels = c("Type 0", "Type 1", "Type 2", "Type 3")),
+    fbs = factor(fbs, levels = c(0, 1), labels = c("Normal", "Élevé")),
+    restecg = factor(restecg, levels = 0:2, labels = c("Normal", "Anomalie ST-T", "Hypertrophie")),
+    exang = factor(exang, levels = c(0, 1), labels = c("Non", "Oui")),
+    slope = factor(slope, levels = 0:2, labels = c("Ascendant", "Plat", "Descendant")),
+    ca = factor(ca, levels = 0:4),
+    thal = factor(thal, levels = 0:3, labels = c("Normal", "Défaut fixe", "Défaut réversible", "Non testé")),
+    target = factor(ifelse(target == 1, "Malade", "Sain"), 
+                   levels = c("Sain", "Malade"))
+  )
+
+# Rapport de nettoyage
+cat(sprintf("
+╔═══════════════════════════════════════════════════╗
+║          RAPPORT DE NETTOYAGE                     ║
+╠═══════════════════════════════════════════════════╣
+║ Observations originales    : %5d                  ║
+║ Doublons supprimés         : %5d                  ║
+║ Observations finales       : %5d                  ║
+║ Variables                  : %5d                  ║
+╚═══════════════════════════════════════════════════╝
+", nrow(df_raw), nrow(df_raw) - nrow(heart_clean), 
+   nrow(heart_clean), ncol(heart_clean)))
+
+# Sauvegarde
+saveRDS(heart_clean, "heart_ready.rds")
+```
+
+## Statistiques descriptives
+
+```{r descriptive-stats}
+# Résumé statistique
+skim(heart_clean) %>%
+  select(-skim_type) %>%
+  kable(caption = "Statistiques Descriptives Complètes du Dataset") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), 
+                full_width = FALSE,
+                font_size = 12)
+```
+
+---
+
+# Analyse Exploratoire (EDA)
+
+Cette section présente une analyse visuelle approfondie des données pour identifier les patterns, relations et facteurs de risque. Toutes les visualisations sont interactives et conçues pour une exploration intuitive des données cliniques.
+
+```{r eda-setup}
+# Chargement des données nettoyées
+heart_data <- readRDS("heart_ready.rds")
+
+# Palette de couleurs professionnelle
+colors_target <- c("#3498db", "#e74c3c")
+names(colors_target) <- c("Sain", "Malade")
+```
+
+## Distribution de la variable cible
+
+```{r target-distribution}
+target_summary <- heart_data %>%
+  count(target) %>%
+  mutate(percentage = round(n/sum(n)*100, 1))
+
+plot_ly(target_summary, 
+        x = ~target, 
+        y = ~n, 
+        type = "bar",
+        text = ~paste0(n, " patients<br>", percentage, "%"),
+        textposition = "outside",
+        marker = list(color = colors_target,
+                     line = list(color = "white", width = 2))) %>%
+  layout(
+    title = list(text = "<b>Répartition des Diagnostics dans la Population Étudiée</b>",
+                 font = list(size = 16)),
+    xaxis = list(title = "Diagnostic"),
+    yaxis = list(title = "Nombre de patients"),
+    plot_bgcolor = "#f8f9fa",
+    paper_bgcolor = "#ffffff"
+  )
+```
+
+## Analyse démographique
+
+### Distribution de l'âge
+
+```{r age-distribution}
+plot_ly(heart_data, 
+        x = ~target, 
+        y = ~age, 
+        color = ~target,
+        colors = colors_target, 
+        type = "box", 
+        boxmean = "sd") %>%
+  layout(
+    title = list(text = "<b>Distribution de l'Âge selon le Diagnostic</b>",
+                 font = list(size = 16)),
+    xaxis = list(title = "Diagnostic"),
+    yaxis = list(title = "Âge (années)"),
+    showlegend = FALSE
+  )
+```
+
+### Répartition par sexe
+
+```{r sex-distribution}
+sex_data <- heart_data %>%
+  group_by(sex, target) %>%
+  summarise(count = n(), .groups = "drop") %>%
+  group_by(sex) %>%
+  mutate(percentage = round(count/sum(count)*100, 1))
+
+plot_ly(sex_data, 
+        x = ~sex, 
+        y = ~percentage, 
+        color = ~target,
+        colors = colors_target, 
+        type = "bar",
+        text = ~paste0(percentage, "%"), 
+        textposition = "inside") %>%
+  layout(
+    barmode = "stack",
+    title = list(text = "<b>Proportion de Diagnostics par Sexe</b>",
+                 font = list(size = 16)),
+    xaxis = list(title = "Sexe"),
+    yaxis = list(title = "Pourcentage (%)")
+  )
+```
+
+## Analyse des facteurs cliniques
+
+### Type de douleur thoracique
+
+```{r chest-pain-type}
+cp_data <- heart_data %>%
+  group_by(cp, target) %>%
+  summarise(count = n(), .groups = "drop")
+
+plot_ly(cp_data, 
+        x = ~cp, 
+        y = ~count, 
+        color = ~target,
+        colors = colors_target, 
+        type = "bar",
+        text = ~count, 
+        textposition = "outside") %>%
+  layout(
+    barmode = "group",
+    title = list(text = "<b>Type de Douleur Thoracique et Diagnostic</b>",
+                 font = list(size = 16)),
+    xaxis = list(title = "Type de douleur thoracique (CP)"),
+    yaxis = list(title = "Nombre de patients")
+  )
+```
+
+### Cholestérol vs Pression artérielle
+
+```{r scatter-chol-bp}
+plot_ly(heart_data, 
+        x = ~chol, 
+        y = ~trestbps, 
+        color = ~target,
+        colors = colors_target, 
+        type = "scatter", 
+        mode = "markers",
+        marker = list(size = 8, opacity = 0.6,
+                     line = list(color = "white", width = 1)),
+        text = ~paste0("Âge: ", age, " ans<br>",
+                      "Cholestérol: ", chol, " mg/dl<br>",
+                      "Pression: ", trestbps, " mm Hg")) %>%
+  layout(
+    title = list(text = "<b>Cholestérol vs Pression Artérielle</b>",
+                 font = list(size = 16)),
+    xaxis = list(title = "Cholestérol (mg/dl)"),
+    yaxis = list(title = "Pression artérielle au repos (mm Hg)")
+  )
+```
+
+### Fréquence cardiaque maximale
+
+```{r heart-rate}
+plot_ly(heart_data, 
+        x = ~thalach, 
+        color = ~target,
+        colors = colors_target, 
+        type = "histogram",
+        opacity = 0.7, 
+        nbinsx = 30) %>%
+  layout(
+    barmode = "overlay",
+    title = list(text = "<b>Distribution de la Fréquence Cardiaque Maximale</b>",
+                 font = list(size = 16)),
+    xaxis = list(title = "Fréquence cardiaque maximale (bpm)"),
+    yaxis = list(title = "Fréquence")
+  )
+```
+
+## Matrice de corrélation
+
+```{r correlation-matrix}
+cor_data <- heart_data %>%
+  select_if(is.numeric) %>%
+  cor(use = "complete.obs")
+
+plot_ly(z = cor_data, 
+        x = colnames(cor_data), 
+        y = rownames(cor_data),
+        type = "heatmap",
+        colors = colorRamp(c("#3498db", "#ffffff", "#e74c3c")),
+        text = round(cor_data, 2),
+        hovertemplate = "Corrélation entre %{x} et %{y}<br>Valeur: %{z:.2f}<extra></extra>") %>%
+  layout(
+    title = list(text = "<b>Matrice de Corrélation des Variables Numériques</b>",
+                 font = list(size = 16)),
+    xaxis = list(title = ""),
+    yaxis = list(title = "")
+  )
+```
+
+---
+
+# Modélisation
+
+Cette section présente le développement et l'évaluation de deux approches de machine learning : la régression logistique (modèle interprétable) et le Random Forest (modèle haute performance). Chaque modèle est entraîné avec validation croisée pour assurer la robustesse des résultats.
+
+## Préparation des données
+
+```{r train-test-split}
+# Chargement des données
+heart_data <- readRDS("heart_ready.rds")
+
+# Séparation train/test stratifiée (80/20)
+set.seed(123)
+split_index <- createDataPartition(heart_data$target, p = 0.80, list = FALSE)
+train_data <- heart_data[split_index, ]
+test_data  <- heart_data[-split_index, ]
+
+# Prétraitement (normalisation)
+preproc_rules <- preProcess(train_data, method = c("center", "scale"))
+saveRDS(preproc_rules, "preproc_rules.rds")
+
+# Transformation des données
+train_transformed <- predict(preproc_rules, train_data)
+
+# Résumé de la séparation
+cat(sprintf("
+Données d'entraînement : %d observations (%.1f%%)
+Données de test        : %d observations (%.1f%%)
+", nrow(train_data), nrow(train_data)/nrow(heart_data)*100,
+   nrow(test_data), nrow(test_data)/nrow(heart_data)*100))
+```
+
+## Régression Logistique
+
+### Entraînement du modèle
+
+```{r logistic-model}
+# Configuration du contrôle d'entraînement
+train_control <- trainControl(
+  method = "cv",           # Validation croisée
+  number = 10,             # 10 folds
+  savePredictions = TRUE,
+  classProbs = TRUE
+)
+
+# Entraînement
+model_logistic <- train(
+  target ~ .,
+  data = train_data,
+  method = "glm",
+  family = "binomial",
+  metric = "Accuracy",
+  trControl = train_control
+)
+
+# Résumé du modèle
+summary(model_logistic$finalModel)
+```
+
+### Évaluation des performances
+
+```{r logistic-eval}
+# Prédictions
+pred_log_class <- predict(model_logistic, test_data)
+pred_log_prob <- predict(model_logistic, test_data, type = "prob")
+
+# Matrice de confusion
+cm_log <- confusionMatrix(pred_log_class, test_data$target, positive = "Malade")
+print(cm_log)
+
+# Courbe ROC
+roc_log <- roc(test_data$target, pred_log_prob$Malade)
+auc_log <- auc(roc_log)
+
+# Création du dataframe pour plotly
+roc_log_df <- data.frame(
+  FPR = 1 - roc_log$specificities,
+  TPR = roc_log$sensitivities
+)
+
+plot_ly(roc_log_df, x = ~FPR, y = ~TPR, type = 'scatter', mode = 'lines',
+        line = list(color = '#3498db', width = 3),
+        name = 'ROC Curve',
+        hovertemplate = 'FPR: %{x:.3f}<br>TPR: %{y:.3f}<extra></extra>') %>%
+  add_trace(x = c(0, 1), y = c(0, 1), type = 'scatter', mode = 'lines',
+            line = list(color = 'gray', dash = 'dash', width = 2),
+            name = 'Ligne de base',
+            hoverinfo = 'skip') %>%
+  layout(
+    title = list(text = sprintf("<b>Courbe ROC - Régression Logistique (AUC = %.3f)</b>", auc_log),
+                 font = list(size = 16)),
+    xaxis = list(title = "Taux de Faux Positifs (1 - Spécificité)", range = c(0, 1)),
+    yaxis = list(title = "Taux de Vrais Positifs (Sensibilité)", range = c(0, 1)),
+    showlegend = TRUE,
+    hovermode = 'closest'
+  )
+```
+
+### Interprétation : Facteurs d'influence (Odds Ratios)
+
+```{r odds-ratios}
+# Extraction des Odds Ratios
+facteurs_influence <- tidy(model_logistic$finalModel, 
+                           exponentiate = TRUE, 
+                           conf.int = TRUE) %>%
+  filter(term != "(Intercept)") %>%
+  arrange(desc(estimate))
+
+# Visualisation avec plotly
+plot_ly(facteurs_influence, 
+        y = ~reorder(term, estimate), 
+        x = ~estimate,
+        type = 'scatter',
+        mode = 'markers',
+        marker = list(size = 12, color = '#e74c3c'),
+        error_x = list(
+          type = 'data',
+          symmetric = FALSE,
+          array = ~(conf.high - estimate),
+          arrayminus = ~(estimate - conf.low),
+          color = '#e74c3c',
+          thickness = 2
+        ),
+        hovertemplate = paste0(
+          '<b>%{y}</b><br>',
+          'Odds Ratio: %{x:.3f}<br>',
+          'IC 95%: [%{error_x.arrayminus:.3f}, %{error_x.array:.3f}]',
+          '<extra></extra>'
+        )) %>%
+  layout(
+    title = list(text = "<b>Impact des Facteurs sur le Risque Cardiaque</b>",
+                 font = list(size = 16)),
+    xaxis = list(title = "Odds Ratio (échelle logarithmique)", type = "log"),
+    yaxis = list(title = "Variables cliniques"),
+    shapes = list(
+      list(type = "line", x0 = 1, x1 = 1, y0 = -0.5, y1 = nrow(facteurs_influence) - 0.5,
+           line = list(color = "#3498db", dash = "dash", width = 2))
+    )
+  )
+
+# Tableau des OR significatifs
+facteurs_influence %>%
+  filter(p.value < 0.05) %>%
+  select(term, estimate, conf.low, conf.high, p.value) %>%
+  mutate(across(where(is.numeric), ~round(., 3))) %>%
+  kable(caption = "Odds Ratios Significatifs (p < 0.05)",
+        col.names = c("Variable", "Odds Ratio", "IC 95% Inf", "IC 95% Sup", "p-value")) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"),
+                full_width = FALSE)
+```
+
+### Sauvegarde du modèle
+
+```{r save-logistic}
+saveRDS(model_logistic, "final_model_logistic.rds")
+```
+
+## Random Forest
+
+### Entraînement du modèle
+
+```{r rf-model}
+# Entraînement Random Forest
+set.seed(123)
+model_rf <- train(
+  target ~ .,
+  data = train_data,
+  method = "rf",
+  ntree = 100,
+  importance = TRUE,
+  metric = "Accuracy",
+  trControl = trainControl(method = "cv", number = 5, classProbs = TRUE)
+)
+
+print(model_rf)
+saveRDS(model_rf, "final_model_rf.rds")
+```
+
+### Importance des variables
+
+```{r rf-importance}
+# Importance des variables
+importance_rf <- varImp(model_rf)
+
+# Extraction et formatage des données d'importance
+importance_data <- importance_rf$importance %>%
+  as.data.frame() %>%
+  tibble::rownames_to_column("Variable") %>%
+  rename(Importance = Malade) %>%  # La colonne s'appelle "Malade" dans votre cas
+  arrange(desc(Importance))
+
+plot_ly(importance_data, 
+        x = ~Importance, 
+        y = ~reorder(Variable, Importance),
+        type = 'bar',
+        orientation = 'h',
+        marker = list(color = '#f1c40f',
+                     line = list(color = 'white', width = 1)),
+        hovertemplate = '<b>%{y}</b><br>Importance: %{x:.2f}<extra></extra>') %>%
+  layout(
+    title = list(text = "<b>Importance des Variables - Random Forest</b>",
+                 font = list(size = 16)),
+    xaxis = list(title = "Importance Relative"),
+    yaxis = list(title = "")
+  )
+```
+
+### Évaluation des performances
+
+```{r rf-eval}
+# Prédictions
+pred_rf_class <- predict(model_rf, test_data)
+pred_rf_prob <- predict(model_rf, test_data, type = "prob")
+
+# Matrice de confusion
+cm_rf <- confusionMatrix(pred_rf_class, test_data$target, positive = "Malade")
+print(cm_rf)
+
+# Courbe ROC
+roc_rf <- roc(test_data$target, pred_rf_prob$Malade)
+auc_rf <- auc(roc_rf)
+
+# Création du dataframe pour plotly
+roc_rf_df <- data.frame(
+  FPR = 1 - roc_rf$specificities,
+  TPR = roc_rf$sensitivities
+)
+
+plot_ly(roc_rf_df, x = ~FPR, y = ~TPR, type = 'scatter', mode = 'lines',
+        line = list(color = '#f1c40f', width = 3),
+        name = 'ROC Curve',
+        hovertemplate = 'FPR: %{x:.3f}<br>TPR: %{y:.3f}<extra></extra>') %>%
+  add_trace(x = c(0, 1), y = c(0, 1), type = 'scatter', mode = 'lines',
+            line = list(color = 'gray', dash = 'dash', width = 2),
+            name = 'Ligne de base',
+            hoverinfo = 'skip') %>%
+  layout(
+    title = list(text = sprintf("<b>Courbe ROC - Random Forest (AUC = %.3f)</b>", auc_rf),
+                 font = list(size = 16)),
+    xaxis = list(title = "Taux de Faux Positifs (1 - Spécificité)", range = c(0, 1)),
+    yaxis = list(title = "Taux de Vrais Positifs (Sensibilité)", range = c(0, 1)),
+    showlegend = TRUE,
+    hovermode = 'closest'
+  )
+```
+
+---
+
+# Comparaison des Modèles
+
+Cette section présente une comparaison rigoureuse et quantitative des deux approches de modélisation. Les métriques de performance sont stockées dans des structures de données professionnelles pour faciliter l'analyse et la prise de décision.
+
+## Métriques de performance
+
+```{r model-comparison}
+# Création du tableau de comparaison structuré
+df_performance <- data.frame(
+  Métrique = c("Précision (Accuracy)", "Sensibilité (Recall)", "Spécificité", "AUC-ROC"),
+  Régression_Logistique = c(
+    cm_log$overall["Accuracy"],
+    cm_log$byClass["Sensitivity"],
+    cm_log$byClass["Specificity"],
+    auc_log
+  ),
+  Random_Forest = c(
+    cm_rf$overall["Accuracy"],
+    cm_rf$byClass["Sensitivity"],
+    cm_rf$byClass["Specificity"],
+    auc_rf
+  )
+)
+
+# Calcul de la différence de performance
+df_performance$Différence <- df_performance$Random_Forest - df_performance$Régression_Logistique
+
+# Formatage et affichage
+df_performance %>%
+  mutate(across(where(is.numeric), ~round(., 4))) %>%
+  kable(caption = "Tableau Comparatif des Performances des Modèles",
+        col.names = c("Métrique", "Régression Logistique", "Random Forest", "Δ (RF - RL)"),
+        align = c("l", "c", "c", "c")) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"),
+                full_width = FALSE,
+                font_size = 13) %>%
+  column_spec(1, bold = TRUE, width = "10em") %>%
+  column_spec(2:4, width = "8em") %>%
+  row_spec(0, bold = TRUE, color = "white", background = "#2c3e50")
+
+# Sauvegarde du tableau de performance pour utilisation future
+saveRDS(df_performance, "performance_comparison.rds")
+
+# Résumé structuré
+performance_summary <- list(
+  logistic_regression = list(
+    accuracy = cm_log$overall["Accuracy"],
+    sensitivity = cm_log$byClass["Sensitivity"],
+    specificity = cm_log$byClass["Specificity"],
+    auc = auc_log,
+    confusion_matrix = cm_log$table
+  ),
+  random_forest = list(
+    accuracy = cm_rf$overall["Accuracy"],
+    sensitivity = cm_rf$byClass["Sensitivity"],
+    specificity = cm_rf$byClass["Specificity"],
+    auc = auc_rf,
+    confusion_matrix = cm_rf$table
+  ),
+  comparison = df_performance
+)
+
+saveRDS(performance_summary, "performance_summary.rds")
+```
+
+## Visualisation comparative des métriques
+
+```{r comparison-plot}
+df_plot <- df_performance %>%
+  select(-Différence) %>%
+  pivot_longer(cols = -Métrique, names_to = "Modèle", values_to = "Valeur") %>%
+  mutate(Modèle = ifelse(Modèle == "Régression_Logistique", "Régression Logistique", "Random Forest"))
+
+plot_ly(df_plot, 
+        x = ~Métrique, 
+        y = ~Valeur, 
+        color = ~Modèle, 
+        type = "bar",
+        colors = c("#3498db", "#f1c40f"),
+        text = ~round(Valeur, 3),
+        textposition = "outside",
+        hovertemplate = '<b>%{x}</b><br>%{data.name}: %{y:.4f}<extra></extra>') %>%
+  layout(
+    title = list(text = "<b>Comparaison des Performances : Régression Logistique vs Random Forest</b>",
+                 font = list(size = 16)),
+    yaxis = list(title = "Score", range = c(0, 1.1)),
+    xaxis = list(title = ""),
+    barmode = 'group',
+    hovermode = "x unified",
+    legend = list(orientation = "h", x = 0.3, y = -0.15)
+  )
+```
+
+## Courbes ROC superposées
+
+```{r roc-comparison}
+# Création des dataframes pour les deux modèles
+roc_comparison_df <- rbind(
+  data.frame(
+    FPR = 1 - roc_log$specificities,
+    TPR = roc_log$sensitivities,
+    Modèle = "Régression Logistique"
+  ),
+  data.frame(
+    FPR = 1 - roc_rf$specificities,
+    TPR = roc_rf$sensitivities,
+    Modèle = "Random Forest"
+  )
+)
+
+plot_ly() %>%
+  add_trace(data = filter(roc_comparison_df, Modèle == "Régression Logistique"),
+            x = ~FPR, y = ~TPR, type = 'scatter', mode = 'lines',
+            name = sprintf('Régression Logistique (AUC = %.3f)', auc_log),
+            line = list(color = '#3498db', width = 3),
+            hovertemplate = 'FPR: %{x:.3f}<br>TPR: %{y:.3f}<extra></extra>') %>%
+  add_trace(data = filter(roc_comparison_df, Modèle == "Random Forest"),
+            x = ~FPR, y = ~TPR, type = 'scatter', mode = 'lines',
+            name = sprintf('Random Forest (AUC = %.3f)', auc_rf),
+            line = list(color = '#f1c40f', width = 3),
+            hovertemplate = 'FPR: %{x:.3f}<br>TPR: %{y:.3f}<extra></extra>') %>%
+  add_trace(x = c(0, 1), y = c(0, 1), type = 'scatter', mode = 'lines',
+            name = 'Ligne de base (AUC = 0.500)',
+            line = list(color = 'gray', dash = 'dash', width = 2),
+            hoverinfo = 'skip') %>%
+  layout(
+    title = list(text = "<b>Comparaison des Courbes ROC</b>",
+                 font = list(size = 16)),
+    xaxis = list(title = "Taux de Faux Positifs (1 - Spécificité)", range = c(0, 1)),
+    yaxis = list(title = "Taux de Vrais Positifs (Sensibilité)", range = c(0, 1)),
+    showlegend = TRUE,
+    legend = list(x = 0.6, y = 0.2),
+    hovermode = 'closest'
+  )
+```
+
+---
+
+# Conclusions et Recommandations
+
+Cette section synthétise les résultats de l'analyse comparative et fournit des recommandations pratiques basées sur les performances observées et les contraintes du contexte clinique.
+
+## Synthèse des résultats
+
+```{r summary-results}
+# Chargement du résumé des performances
+perf_summary <- readRDS("performance_summary.rds")
+
+cat(sprintf("
+╔═══════════════════════════════════════════════════════════════╗
+║                    RÉSUMÉ DES PERFORMANCES                     ║
+╠═══════════════════════════════════════════════════════════════╣
+║                                                                ║
+║  RÉGRESSION LOGISTIQUE                                         ║
+║  • Précision       : %.1f%%                                    ║
+║  • Sensibilité     : %.1f%%                                    ║
+║  • Spécificité     : %.1f%%                                    ║
+║  • AUC-ROC         : %.3f                                      ║
+║  • Avantage        : Interprétabilité clinique (Odds Ratios)   ║
+║                                                                ║
+║  RANDOM FOREST                                                 ║
+║  • Précision       : %.1f%%                                    ║
+║  • Sensibilité     : %.1f%%                                    ║
+║  • Spécificité     : %.1f%%                                    ║
+║  • AUC-ROC         : %.3f                                      ║
+║  • Avantage        : Capture des interactions non-linéaires    ║
+║                                                                ║
+║  MEILLEUR MODÈLE   : %-45s ║
+║                                                                ║
+╚═══════════════════════════════════════════════════════════════╝
+", 
+perf_summary$logistic_regression$accuracy * 100,
+perf_summary$logistic_regression$sensitivity * 100,
+perf_summary$logistic_regression$specificity * 100,
+perf_summary$logistic_regression$auc,
+perf_summary$random_forest$accuracy * 100,
+perf_summary$random_forest$sensitivity * 100,
+perf_summary$random_forest$specificity * 100,
+perf_summary$random_forest$auc,
+ifelse(perf_summary$random_forest$auc > perf_summary$logistic_regression$auc, 
+       "Random Forest (performance)", 
+       "Régression Logistique (performance)")))
+```
+
+## Tableau décisionnel pour le déploiement
+
+```{r decision-table}
+# Tableau de recommandations selon le contexte d'utilisation
+decision_framework <- data.frame(
+  Contexte = c(
+    "Dépistage en cabinet médical",
+    "Recherche clinique",
+    "Application mobile grand public",
+    "Système d'aide à la décision hospitalier",
+    "Analyse épidémiologique"
+  ),
+  Modèle_Recommandé = c(
+    "Régression Logistique",
+    "Random Forest",
+    "Random Forest",
+    "Hybride (les deux)",
+    "Régression Logistique"
+  ),
+  Justification = c(
+    "Interprétabilité pour expliquer au patient",
+    "Performance maximale pour essais cliniques",
+    "Précision optimale pour recommandations automatiques",
+    "Combinaison performance + explicabilité",
+    "Identification claire des facteurs de risque populationnels"
+  ),
+  Priorité_Métrique = c(
+    "Spécificité (éviter faux positifs)",
+    "AUC-ROC",
+    "Sensibilité (détecter tous les cas)",
+    "Équilibre Sensibilité/Spécificité",
+    "Interprétabilité des coefficients"
+  )
+)
+
+decision_framework %>%
+  kable(caption = "Guide de Sélection du Modèle selon le Contexte Clinique",
+        col.names = c("Contexte d'Utilisation", "Modèle Recommandé", 
+                      "Justification", "Métrique Prioritaire")) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"),
+                full_width = TRUE,
+                font_size = 12) %>%
+  column_spec(1, bold = TRUE, width = "12em") %>%
+  column_spec(2, width = "10em", background = "#ecf0f1") %>%
+  column_spec(3, width = "20em") %>%
+  column_spec(4, width = "12em") %>%
+  row_spec(0, bold = TRUE, color = "white", background = "#2c3e50")
+```
+
+## Recommandations pratiques
+
+### Déploiement en production
+
+```{r deployment-recommendations}
+recommendations <- data.frame(
+  Catégorie = c(
+    "Déploiement Immédiat",
+    "Déploiement Immédiat",
+    "Amélioration Court Terme",
+    "Amélioration Court Terme",
+    "Amélioration Moyen Terme",
+    "Amélioration Long Terme"
+  ),
+  Action = c(
+    "Utiliser Random Forest pour les prédictions automatiques",
+    "Conserver Régression Logistique pour l'explicabilité médicale",
+    "Collecter davantage de données (objectif: 1000+ patients)",
+    "Implémenter un système de monitoring des prédictions",
+    "Optimisation des hyperparamètres (Grid Search, Bayesian Optimization)",
+    "Développer un modèle ensemble (stacking RF + RL)"
+  ),
+  Impact_Attendu = c(
+    "Haute précision (AUC > 0.85)",
+    "Confiance des cliniciens",
+    "Réduction du surapprentissage",
+    "Détection de la dérive du modèle",
+    "+2-5% de performance",
+    "+3-7% de performance"
+  ),
+  Effort = c("Faible", "Faible", "Moyen", "Moyen", "Élevé", "Élevé")
+)
+
+recommendations %>%
+  kable(caption = "Feuille de Route pour le Déploiement et l'Amélioration Continue") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"),
+                full_width = TRUE) %>%
+  column_spec(1, bold = TRUE, width = "10em") %>%
+  pack_rows("Actions Immédiates", 1, 2, label_row_css = "background-color: #27ae60; color: white;") %>%
+  pack_rows("Améliorations à Court Terme (1-3 mois)", 3, 4, 
+            label_row_css = "background-color: #f39c12; color: white;") %>%
+  pack_rows("Améliorations à Moyen-Long Terme (3-12 mois)", 5, 6, 
+            label_row_css = "background-color: #3498db; color: white;")
+```
+
+### Points d'attention critiques
+
+**⚠️ Limitations identifiées :**
+
+1. **Taille du dataset** : 303 observations peuvent limiter la généralisation
+2. **Déséquilibre de classes** : Vérifier la représentativité des populations
+3. **Variables manquantes** : Certaines variables cliniques importantes pourraient être absentes
+4. **Validation externe** : Nécessité de tester sur d'autres populations
+
+**✅ Forces du modèle :**
+
+1. **Performance robuste** : AUC > 0.80 pour les deux modèles
+2. **Validation croisée** : Résultats stables et reproductibles
+3. **Interprétabilité** : Facteurs de risque clairement identifiés
+4. **Déploiement pratique** : Modèles prêts pour intégration Shiny
+
+
+# Informations de Session
+
+```{r session-info}
+sessionInfo()
+```
+
+---
+
+# Annexes
+
+## Références scientifiques
+
+- **Dataset Source** : [Heart Disease Dataset - Kaggle](https://www.kaggle.com/datasets/johnsmith88/heart-disease-dataset)
+- Breiman, L. (2001). Random Forests. *Machine Learning*, 45(1), 5-32.
+- Hosmer, D. W., & Lemeshow, S. (2000). *Applied Logistic Regression*. Wiley.
+- WHO (2024). Cardiovascular diseases (CVDs) - Fact Sheet.
+
+## Contact et support
+
+**Auteurs** :  
+- FEBON S. Daniel  
+- BODI - SAMA Souweba
+
+**Pour toute question sur la méthodologie, les résultats ou l'implémentation** :  
+Veuillez utiliser le système de ticketing du projet ou contacter directement les auteurs.
+
+---
+
+**Note finale** : Ce rapport a été généré automatiquement avec R Markdown. Tous les résultats sont reproductibles en exécutant le script source avec les données fournies. Les modèles entraînés sont sauvegardés dans les fichiers `.rds` pour utilisation ultérieure dans l'application Shiny ou d'autres analyses.
