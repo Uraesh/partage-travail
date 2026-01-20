@@ -1,0 +1,441 @@
+---
+title: "TP_Mental_Health.Rmd"
+author: "SAMA_Farida"
+date: "2026-01-14"
+output:
+  pdf_document: default
+  html_document: default
+---
+# Importer le CSV avec base R
+
+
+library(readr)
+
+mental_health <- read_csv("mental_health_social_media_dataset.csv")
+
+
+# Vérifier l'import
+head(data)
+str(data)
+View(data)
+
+dim(data)      # nombre de lignes et colonnes
+names(data)    # noms des colonnes
+str(data)      # structure : type de chaque variable
+summary(data)    # min, max, moyenne, médiane pour les numériques
+colSums(is.na(data))   # nombre de NA par colonne
+nrow(data) - nrow(unique(data))   # combien de lignes dupliquées
+sapply(data, class)   # type de chaque colonne
+names(data) <- c(
+  "nom_personne",
+  "age",
+  "date",
+  "sexe",
+  "plateforme",
+  "temps_ecran_quotidien_min",
+  "temps_reseaux_sociaux_min",
+  "interactions_negatives",
+  "interactions_positives",
+  "heures_sommeil",
+  "activite_physique_min",
+  "niveau_anxiete",
+  "niveau_stress",
+  "niveau_humeur",
+  "etat_mental"
+)
+
+names(data)
+head(data)
+
+# moyenne par plateforme 
+aggregate(temps_ecran_quotidien_min ~ plateforme, data, mean)
+aggregate(temps_reseaux_sociaux_min ~ plateforme, data, mean)
+
+
+# moyenne par etat mental
+aggregate(heures_sommeil ~ etat_mental, data, mean)
+aggregate(niveau_stress ~ etat_mental, data, mean)
+aggregate(niveau_anxiete ~ etat_mental, data, mean)
+
+
+#correlation entre variable numerique 
+cor(data$temps_reseaux_sociaux_min, data$niveau_stress, use = "complete.obs")
+cor(data$temps_reseaux_sociaux_min, data$niveau_anxiete, use = "complete.obs")
+cor(data$heures_sommeil, data$niveau_stress, use = "complete.obs")
+
+# comparaison par sexe 
+aggregate(temps_ecran_quotidien_min ~ sexe, data, mean)
+aggregate(heures_sommeil ~ sexe, data, mean)
+
+#relation croises 
+aggregate(niveau_stress ~ plateforme + etat_mental, data, mean)
+
+
+# Histogramme du temps d'écran quotidien
+hist(data$temps_ecran_quotidien_min,
+     main = "Distribution du temps d'écran quotidien",
+     xlab = "Minutes par jour",
+     col = "lightblue", border = "white")
+
+# Histogramme des heures de sommeil
+hist(data$heures_sommeil,
+     main = "Distribution des heures de sommeil",
+     xlab = "Heures par nuit",
+     col = "lightgreen", border = "white")
+
+
+
+# Stress par état mental
+boxplot(niveau_stress ~ etat_mental, data = data,
+        main = "Niveau de stress par état mental",
+        xlab = "État mental", ylab = "Niveau de stress",
+        col = c("orange", "lightblue"))
+
+
+# Sommeil par état mental
+boxplot(heures_sommeil ~ etat_mental, data = data,
+        main = "Heures de sommeil par état mental",
+        xlab = "État mental", ylab = "Heures de sommeil",
+        col = c("lightgreen", "pink"))
+
+
+moyennes <- aggregate(temps_ecran_quotidien_min ~ plateforme, data, mean)
+
+barplot(moyennes$temps_ecran_quotidien_min,
+        names.arg = moyennes$plateforme,
+        main = "Temps d'écran moyen par plateforme",
+        xlab = "Plateforme", ylab = "Minutes par jour",
+        col = "skyblue", las = 2)
+
+
+
+
+plot(data$temps_reseaux_sociaux_min, data$niveau_stress,
+     main = "Temps réseaux sociaux vs niveau de stress",
+     xlab = "Temps sur réseaux sociaux (min)",
+     ylab = "Niveau de stress",
+     pch = 19, col = "red")
+
+abline(lm(niveau_stress ~ temps_reseaux_sociaux_min, data = data),
+       col = "blue", lwd = 2)
+
+
+# Sélectionner uniquement les colonnes numériques
+num_data <- data[sapply(data, is.numeric)]
+
+# Calculer la matrice de corrélation
+cor_matrix <- cor(num_data, use = "complete.obs")
+
+# Afficher la matrice
+print(cor_matrix)
+
+
+
+# Heatmap simple
+heatmap(cor_matrix,
+        main = "Matrice de corrélation",
+        col = colorRampPalette(c("red", "white", "blue"))(20))
+
+
+pairs(num_data,
+      main = "Scatterplot matrix des variables numériques",
+      pch = 19, col = "darkblue")
+
+
+plot(data$temps_reseaux_sociaux_min, data$niveau_stress,
+     main = "Temps réseaux sociaux vs niveau de stress",
+     xlab = "Temps réseaux sociaux (min)",
+     ylab = "Niveau de stress",
+     pch = 19, col = "red")
+
+abline(lm(niveau_stress ~ temps_reseaux_sociaux_min, data = data),
+       col = "blue", lwd = 2)
+
+
+# Vérifier les noms
+names(data)
+# Vérifier les 6 premières lignes
+head(data)
+
+
+
+# Installer les packages si nécessaire
+install.packages("randomForest")
+install.packages("ggplot2")
+
+# Charger les packages
+library(randomForest)
+library(ggplot2)
+
+# Charger le dataset
+data <- read.csv("mental_health_social_media.csv")
+
+# Nettoyage rapide (optionnel)
+data <- na.omit(data)
+
+# Convertir les colonnes catégorielles en facteurs
+data$platform <- as.factor(data$platform)
+data$gender <- as.factor(data$gender)
+data$etat_mental <- as.factor(data$etat_mental)
+
+# Créer le modèle Random Forest
+rf_model <- randomForest(etat_mental ~ ., data = data, importance = TRUE)
+
+# Afficher l’importance des variables
+importance(rf_model)
+
+# Tracer les deux types d’importance
+varImpPlot(rf_model,
+           type = 1,  # MeanDecreaseAccuracy
+           main = "Importance des variables (Accuracy)",
+           col = "steelblue")
+
+varImpPlot(rf_model,
+           type = 2,  # MeanDecreaseGini
+           main = "Importance des variables (Gini)",
+           col = "darkgreen")
+# Charger les packages nécessaires
+library(randomForest)
+
+# Charger et nettoyer les données
+data <- read.csv("mental_health_social_media.csv")
+data <- na.omit(data)
+
+# Convertir les variables catégorielles en facteurs
+data$platform <- as.factor(data$platform)
+data$gender <- as.factor(data$gender)
+data$etat_mental <- as.factor(data$etat_mental)
+
+# Créer le modèle Random Forest
+rf_model <- randomForest(etat_mental ~ ., data = data, importance = TRUE)
+
+# Nettoyer les données pour la prédiction (optionnel si déjà fait)
+rf_data_clean <- data
+
+# Prédire avec le modèle
+predictions <- predict(rf_model, rf_data_clean)
+
+# Afficher les premières prédictions
+head(predictions)
+summary(data)
+aggregate(sleep_hours ~ mental_state, data, mean)
+
+hist(data$daily_screen_time_min,
+     main = "Distribution du temps d'écran quotidien",
+     xlab = "Minutes par jour",
+     col = "lightblue", border = "white")
+
+boxplot(stress_level ~ mental_state, data = data,
+        main = "Niveau de stress par état mental",
+        xlab = "État mental", ylab = "Stress",
+        col = c("orange", "lightblue"))
+library(randomForest)
+
+# Convertir les variables catégorielles en facteurs
+data$platform <- as.factor(data$platform)
+data$gender <- as.factor(data$gender)
+data$mental_state <- as.factor(data$mental_state)
+
+# Créer le modèle
+rf_model <- randomForest(mental_state ~ ., data = data, importance = TRUE)
+
+# Importance des variables
+varImpPlot(rf_model)
+#L’analyse de l’importance des variables révèle que le temps d’écran quotidien, le nombre d’interactions négatives, le temps passé sur les réseaux sociaux et les heures de sommeil sont les facteurs les plus influents dans la prédiction de l’état mental.
+
+# Prédire sur le même dataset que celui utilisé pour l'entraînement
+predictions <- predict(rf_model, data)
+
+# Afficher les premières prédictions
+head(predictions)
+
+# Tableau de fréquence
+table(predictions)
+# Nettoyer les données (optionnel)
+rf_data_clean <- na.omit(data)
+
+# Prédire sur les données nettoyées
+predictions <- predict(rf_model, rf_data_clean)
+
+#Random Forest
+# Charger le package
+library(randomForest)
+
+# Nettoyer les données si nécessaire
+rf_data_clean <- na.omit(data)
+
+# Convertir les variables catégorielles en facteurs
+rf_data_clean$platform <- as.factor(rf_data_clean$platform)
+rf_data_clean$gender <- as.factor(rf_data_clean$gender)
+rf_data_clean$mental_state <- as.factor(rf_data_clean$mental_state)
+
+# Créer le modèle Random Forest
+rf_model <- randomForest(mental_state ~ ., 
+                         data = rf_data_clean, 
+                         ntree = 500, 
+                         mtry = 3, 
+                         importance = TRUE)
+
+# Afficher le résumé du modèle
+print(rf_model)
+#Un modèle Random Forest de classification a été entraîné afin de prédire l’état mental des individus (Healthy / Stressed). Le modèle repose sur 500 arbres de décision, avec trois variables sélectionnées aléatoirement à chaque division (mtry = 3).
+
+#Les résultats montrent une performance parfaite, avec un taux d’erreur hors-sac (Out-Of-Bag) égal à 0 %. La matrice de confusion confirme que l’ensemble des individus ont été correctement classés :
+
+    #341 individus en état Healthy
+
+    #4601 individus en état Stressed
+
+#Limites du modèle
+
+#Toutefois, cette performance parfaite suggère une structure fortement déterministe des données et un déséquilibre important entre les classes. Le modèle pourrait ainsi présenter une capacité de généralisation limitée sur des données réelles ou non vues.
+
+
+#Modéle arbre
+# Charger les packages nécessaires
+library(rpart)
+library(rpart.plot)
+
+# 1. Importer les données
+data <- read.csv("mental_health_social_media_dataset.csv", stringsAsFactors = FALSE)
+
+# 2. Convertir les colonnes catégorielles en facteurs
+data$platform <- as.factor(data$platform)
+data$gender <- as.factor(data$gender)
+data$mental_state <- as.factor(data$mental_state)
+
+# 3. Créer le modèle d'arbre de décision avec les variables clés
+tree_model <- rpart(mental_state ~ social_media_time_min +
+                                   daily_screen_time_min +
+                                   negative_interactions_count +
+                                   platform,
+                    data = data,
+                    method = "class",
+                    control = rpart.control(cp = 0.01))
+
+# 4. Afficher la structure de l'arbre dans la console
+print(tree_model)
+
+# 5. Visualiser l'arbre avec les probabilités et les classes
+rpart.plot(tree_model,
+           type = 2,           # texte sous les boîtes
+           extra = 104,        # affiche classe + proba + % d'observations
+           fallen.leaves = TRUE,
+           main = "Arbre de décision pour l'état mental")
+#Comparaison des modèles
+
+#Un arbre de décision a été entraîné afin de comparer ses performances à celles du modèle Random Forest. L’arbre met en évidence des règles simples et interprétables, notamment l’influence majeure du temps passé sur les réseaux sociaux, du temps d’écran total et des interactions négatives.
+
+#Bien que l’arbre de décision offre une interprétation claire des mécanismes de décision, le modèle Random Forest présente une meilleure robustesse et une performance légèrement supérieure grâce à l’agrégation de plusieurs arbres.
+
+#CONCLUSION FINALE DU PROJET
+
+#En conclusion, l’analyse comparative montre que le modèle Random Forest constitue le meilleur compromis entre performance et stabilité, tandis que l’arbre de décision permet une compréhension intuitive des facteurs influençant l’état mental. L’utilisation conjointe des deux modèles offre ainsi une approche complète alliant prédiction et interprétation.
+
+#Comparaison des modèles de prédiction de l’état mental
+
+#Deux modèles ont été entraînés pour prédire l’état mental (mental_state) : un arbre de décision et un Random Forest.
+
+#Arbre de décision
+
+#Identifie des règles simples : par exemple, un temps sur les réseaux sociaux faible et peu d’interactions négatives prédit “Healthy”.
+
+#Très interprétable, mais sensible aux variations des données et risque de sur-apprentissage.
+
+#Random Forest
+
+#Composé de 500 arbres, présente un taux d’erreur OOB de 0 %, avec toutes les observations correctement classées.
+
+#Les variables les plus importantes sont le temps d’écran quotidien, les interactions négatives, le temps sur les réseaux sociaux et le sommeil.
+
+#Plus robuste, stable et avec meilleure généralisation que l’arbre unique, mais moins interprétable.
+
+#Conclusion
+
+#Bien que les performances sur ce dataset soient similaires, le Random Forest est préférable en pratique pour sa robustesse et sa capacité à généraliser sur de nouvelles données. L’arbre reste utile pour comprendre les règles de décision.
+
+
+# 1. Charger les données
+data <- read.csv("mental_health_social_media_dataset.csv", stringsAsFactors = FALSE)
+
+# 2. Convertir les variables catégorielles en facteurs
+data$gender <- as.factor(data$gender)
+data$platform <- as.factor(data$platform)
+
+# 3. Créer le modèle de régression linéaire
+lm_model <- lm(stress_level ~ age +
+                          gender +
+                          platform +
+                          daily_screen_time_min +
+                          social_media_time_min +
+                          negative_interactions_count +
+                          positive_interactions_count +
+                          sleep_hours +
+                          physical_activity_min,
+               data = data)
+
+# 4. Résumé du modèle
+summary(lm_model)
+#La régression linéaire classique fonctionne techniquement, mais :
+
+#Elle n’est pas idéale pour une variable binaire
+
+#Les prédictions peuvent dépasser 0 ou 1
+
+#Les coefficients donnent une idée de l’impact des variables, mais pas une probabilité fiable comme en régression logistique
+
+#Bon point : tu peux mettre ces coefficients et graphiques dans ton rapport pour illustrer l’effet des facteurs sur le stress.
+
+# Charger les données
+data <- read.csv("mental_health_social_media_dataset.csv", stringsAsFactors = FALSE)
+
+# Convertir les colonnes catégorielles en facteurs
+data$gender <- as.factor(data$gender)
+data$platform <- as.factor(data$platform)
+
+# Transformer la variable cible en numérique (0 = Healthy, 1 = Stressed)
+data$mental_state_num <- ifelse(data$mental_state == "Stressed", 1,
+                                ifelse(data$mental_state == "Healthy", 0, NA))
+
+# Supprimer les lignes avec NA dans la cible
+data_clean <- data[!is.na(data$mental_state_num), ]
+
+# Créer le modèle de régression linéaire
+lm_model <- lm(mental_state_num ~ age +
+                                gender +
+                                platform +
+                                daily_screen_time_min +
+                                social_media_time_min +
+                                negative_interactions_count +
+                                positive_interactions_count +
+                                sleep_hours +
+                                physical_activity_min,
+               data = data_clean)
+
+# Résumé du modèle
+summary(lm_model)
+
+# Générer les prédictions
+predictions <- predict(lm_model, data_clean)
+
+# Visualiser les prédictions vs valeurs réelles
+plot(data_clean$mental_state_num, predictions,
+     xlab = "Valeur réelle (0 = Healthy, 1 = Stressed)",
+     ylab = "Prédiction du modèle",
+     main = "Régression linéaire : prédictions vs valeur réelle",
+     pch = 16, col = "blue")
+
+# Ajouter une ligne de tendance
+abline(lm(data_clean$mental_state_num ~ predictions), col = "red", lwd = 2)
+
+---
+
+## Interprétation 
+
+#Ce graphe compare les **valeurs réelles du mental_state** (0 = Healthy, 1 = Stressed) avec les **prédictions continues** du modèle de régression linéaire.  
+
+#- Les points bleus montrent deux regroupements : autour de 0 (individus Healthy) et autour de 1 (individus Stressed).  
+#- La ligne rouge illustre la tendance calculée par le modèle : elle montre que plus certains facteurs augmentent (temps d’écran, interactions négatives…), plus la probabilité d’être classé "Stressed" croît.  
+#- Cependant, la régression linéaire n’est pas parfaitement adaptée aux données binaires : elle peut produire des valeurs en dehors de [0,1] et ne sépare pas clairement les deux classes.  
+#- Ce graphe illustre donc une **approximation utile**, mais une **régression logistique** serait plus appropriée pour modéliser un état mental binaire.
+
