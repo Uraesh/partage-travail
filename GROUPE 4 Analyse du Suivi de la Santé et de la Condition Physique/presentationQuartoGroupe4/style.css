@@ -1,0 +1,269 @@
+/* Styles additionnels pour la présentation */
+
+/* Animations d'apparition */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.reveal .slide-content {
+  animation: fadeInUp 0.6s ease;
+}
+
+/* Boutons et éléments interactifs */
+.btn-primary {
+  background-color: #0066CC;
+  color: white;
+  padding: 0.5em 1em;
+  border-radius: 5px;
+  border: none;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn-primary:hover {
+  background-color: #0052A3;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0,102,204,0.3);
+}
+
+/* Badges et labels */
+.badge {
+  display: inline-block;
+  padding: 0.3em 0.6em;
+  border-radius: 20px;
+  font-size: 0.8em;
+  font-weight: 600;
+  margin: 0.2em;
+}
+
+.badge-success {
+  background-color: #00CC99;
+  color: white;
+}
+
+.badge-warning {
+  background-color: #FF6600;
+  color: white;
+}
+
+.badge-info {
+  background-color: #0066CC;
+  color: white;
+}
+
+/* Cartes statistiques */
+.stat-card {
+  background: linear-gradient(135deg, #E8F4F8 0%, #ffffff 100%);
+  border-radius: 10px;
+  padding: 1.5em;
+  margin: 1em 0;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  transition: transform 0.3s ease;
+}
+
+.stat-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 6px 16px rgba(0,0,0,0.15);
+}
+
+.stat-number {
+  font-size: 2.5em;
+  font-weight: 700;
+  color: #0066CC;
+  line-height: 1;
+}
+
+.stat-label {
+  font-size: 0.9em;
+  color: #666;
+  margin-top: 0.5em;
+}
+
+/* Icônes et émojis */
+.emoji-large {
+  font-size: 2em;
+  margin: 0.2em;
+}
+
+/* Grilles de contenu */
+.grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2em;
+  margin: 1em 0;
+}
+
+.grid-3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 1.5em;
+  margin: 1em 0;
+}
+
+/* Sections colorées */
+.highlight-box {
+  background-color: #E8F4F8;
+  border-left: 5px solid #0066CC;
+  padding: 1em;
+  margin: 1em 0;
+  border-radius: 5px;
+}
+
+.success-box {
+  background-color: #E8F8F5;
+  border-left: 5px solid #00CC99;
+  padding: 1em;
+  margin: 1em 0;
+  border-radius: 5px;
+}
+
+.warning-box {
+  background-color: #FFF5E6;
+  border-left: 5px solid #FF6600;
+  padding: 1em;
+  margin: 1em 0;
+  border-radius: 5px;
+}
+
+/* Timeline */
+.timeline {
+  position: relative;
+  padding-left: 2em;
+}
+
+.timeline::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: linear-gradient(to bottom, #0066CC, #00CC99);
+}
+
+.timeline-item {
+  position: relative;
+  margin-bottom: 1.5em;
+  padding-left: 1.5em;
+}
+
+.timeline-item::before {
+  content: '';
+  position: absolute;
+  left: -2.3em;
+  top: 0.3em;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background-color: #0066CC;
+  border: 3px solid white;
+  box-shadow: 0 0 0 3px #E8F4F8;
+}
+
+/* Progressions et scores */
+.progress-bar {
+  background-color: #E8F4F8;
+  border-radius: 10px;
+  height: 20px;
+  overflow: hidden;
+  margin: 0.5em 0;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #0066CC, #00CC99);
+  transition: width 1s ease;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 0.5em;
+  color: white;
+  font-size: 0.7em;
+  font-weight: 600;
+}
+
+/* Citations et quotes */
+.quote {
+  border-left: 4px solid #FF6600;
+  padding-left: 1em;
+  font-style: italic;
+  color: #555;
+  margin: 1.5em 0;
+}
+
+/* Responsivité */
+@media (max-width: 768px) {
+  .grid-2, .grid-3 {
+    grid-template-columns: 1fr;
+  }
+  
+  .columns {
+    flex-direction: column;
+  }
+}
+
+/* Transitions de slides personnalisées */
+.reveal .slides section.slide-background-present {
+  opacity: 1;
+}
+
+/* Amélioration de la lisibilité */
+.reveal strong {
+  color: #0066CC;
+  font-weight: 700;
+}
+
+.reveal em {
+  color: #FF6600;
+}
+
+/* Listes avec puces personnalisées */
+.reveal ul.custom-list {
+  list-style: none;
+  padding-left: 0;
+}
+
+.reveal ul.custom-list li::before {
+  content: "▸";
+  color: #0066CC;
+  font-weight: bold;
+  margin-right: 0.5em;
+}
+
+/* Tooltips */
+.tooltip {
+  position: relative;
+  display: inline-block;
+  border-bottom: 1px dotted #0066CC;
+  cursor: help;
+}
+
+.tooltip .tooltiptext {
+  visibility: hidden;
+  background-color: #2C3E50;
+  color: white;
+  text-align: center;
+  border-radius: 6px;
+  padding: 5px 10px;
+  position: absolute;
+  z-index: 1;
+  bottom: 125%;
+  left: 50%;
+  transform: translateX(-50%);
+  opacity: 0;
+  transition: opacity 0.3s;
+  font-size: 0.8em;
+}
+
+.tooltip:hover .tooltiptext {
+  visibility: visible;
+  opacity: 1;
+}
