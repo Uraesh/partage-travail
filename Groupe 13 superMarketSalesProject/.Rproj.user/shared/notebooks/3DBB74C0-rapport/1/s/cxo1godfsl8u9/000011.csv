@@ -1,0 +1,4 @@
+"0","df <- read.csv(""SuperMarket Analysis.csv"", check.names = FALSE)"
+"0",""
+"0","# Affichage interactif des 10 premières lignes"
+"0","datatable(head(df, 10), options = list(scrollX = TRUE))"

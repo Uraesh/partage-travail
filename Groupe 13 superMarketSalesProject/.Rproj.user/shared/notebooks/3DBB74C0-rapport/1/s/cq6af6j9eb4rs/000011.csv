@@ -1,0 +1,8 @@
+"0",""
+"0","# c. Conversion des types"
+"0","df_clean <- df_clean %>%"
+"0","  mutate("
+"0","    Date = as.Date(Date, format=""%m/%d/%Y""),"
+"0","    across(where(is.character), as.factor)"
+"0","  )"
+"0",""

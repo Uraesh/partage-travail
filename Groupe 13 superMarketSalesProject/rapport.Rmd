@@ -1,0 +1,197 @@
+---
+title: "📊 Rapport d'Analyse : Performance Supermarché"
+author: "Groupe_13"
+date: "2026-01-14"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    theme: united
+    highlight: tango
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+# 1. PRÉPARATION DE L'ENVIRONNEMENT
+
+## a. Packages et librairies nécessaires
+
+Nous utilisons une suite de packages pour la manipulation de données, la visualisation et la mise en forme de rapports professionnels.
+
+```{r packages}
+# Liste des packages nécessaires
+packages <- c("tidyverse", "DT", "lubridate", "kableExtra", "scales")
+installed_packages <- packages %in% rownames(installed.packages())
+if (any(installed_packages == FALSE)) {
+  install.packages(packages[!installed_packages])
+}
+
+# Chargement des librairies
+library(tidyverse)  # Manipulation et visualisation (ggplot2)
+library(DT)         # Tableaux interactifs
+library(lubridate)  # Gestion des dates
+library(kableExtra) # Mise en forme des tableaux
+library(scales)     # Formatage des nombres et monnaies
+
+```
+
+## b. Chargement du dataset
+
+Chargement des données sources et premier aperçu des transactions.
+
+```{r load_data}
+df <- read.csv("SuperMarket Analysis.csv", check.names = FALSE)
+
+# Affichage interactif des 10 premières lignes
+datatable(head(df, 10), options = list(scrollX = TRUE))
+
+```
+
+---
+
+# 2. NETTOYAGE ET PRÉPARATION DES DONNÉES
+
+Cette étape garantit l'intégrité des calculs en gérant les types de données et en supprimant les bruits inutiles.
+
+```{r cleaning}
+# a. Suppression de l'ID facture (non utile pour l'analyse statistique)
+df_clean <- df %>% select(-`Invoice ID`)
+
+# b. Audit de qualité : Valeurs manquantes et doublons
+qualite <- data.frame(
+  Indicateur = c("Valeurs manquantes", "Doublons"),
+  Total = c(sum(is.na(df_clean)), sum(duplicated(df_clean)))
+)
+
+kable(qualite) %>% kable_styling(full_width = F, position = "left")
+
+# c. Conversion des types
+df_clean <- df_clean %>%
+  mutate(
+    Date = as.Date(Date, format="%m/%d/%Y"),
+    across(where(is.character), as.factor)
+  )
+
+```
+
+---
+
+# 3. ANALYSE DES PERFORMANCES PRODUITS
+
+## A. Identification des catégories leaders
+
+Nous comparons ici le volume de vente, le Chiffre d'Affaires et la satisfaction client.
+
+```{r product_analysis}
+product_sales <- df_clean %>%
+  group_by(`Product line`) %>%
+  summarise(
+    Quantite_Totale = sum(Quantity),
+    Revenu_Total = sum(Sales),
+    Note_Moyenne = round(mean(Rating), 2)
+  ) %>%
+  arrange(desc(Revenu_Total))
+
+kable(product_sales, caption = "Performance par ligne de produits") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"))
+
+```
+
+## B. Visualisation du Chiffre d'Affaires
+
+Le graphique suivant illustre la domination financière des rayons.
+
+```{r plot_sales}
+ggplot(product_sales, aes(x = reorder(`Product line`, Revenu_Total), y = Revenu_Total, fill = `Product line`)) +
+  geom_col() +
+  coord_flip() +
+  scale_y_continuous(labels = label_dollar()) +
+  labs(
+    title = "Classement des catégories par Revenu",
+    x = "Catégorie",
+    y = "Ventes totales ($)"
+  ) +
+  theme_minimal() +
+  guides(fill = "none")
+
+```
+
+---
+
+# 4. ANALYSE DES TENDANCES TEMPORELLES
+
+Est-ce que l'activité commerciale est influencée par le calendrier hebdomadaire ?
+
+```{r time_trends}
+sales_by_day <- df_clean %>%
+  mutate(Jour = wday(Date, label = TRUE, abbr = FALSE)) %>%
+  group_by(Jour) %>%
+  summarise(Ventes_Moyennes = mean(Sales))
+
+ggplot(sales_by_day, aes(x = Jour, y = Ventes_Moyennes, group = 1)) +
+  geom_line(color = "steelblue", linewidth = 1) +
+  geom_point(size = 3, color = "darkblue") +
+  scale_y_continuous(labels = label_dollar()) +
+  labs(title = "Évolution des ventes moyennes par jour de la semaine",
+       subtitle = "Analyse de la saisonnalité hebdomadaire",
+       y = "Ventes Moyennes ($)") +
+  theme_light()
+
+```
+
+---
+
+# 5. SEGMENTATION PAR PROFIL CLIENT
+
+Comparaison des habitudes d'achat entre les genres à travers les rayons.
+
+```{r customer_profile}
+ggplot(df_clean, aes(x = `Product line`, y = Sales, fill = Gender)) +
+  geom_boxplot(alpha = 0.7) +
+  coord_flip() +
+  scale_y_continuous(labels = label_dollar()) +
+  labs(title = "Répartition des dépenses par catégorie et par genre",
+       x = "Ligne de produit",
+       y = "Montant de la vente ($)") +
+  theme_minimal()
+
+```
+
+---
+
+# 6. MODÉLISATION STATISTIQUE
+
+Nous appliquons une **Régression Linéaire Multiple** pour identifier les moteurs réels du Chiffre d'Affaires.
+
+```{r linear_model}
+modele_ventes <- lm(Sales ~ `Unit price` + Quantity + `Product line`, data = df_clean)
+
+# Résumé des résultats
+summary(modele_ventes)
+
+```
+
+---
+
+# 7. CONCLUSION ET RECOMMANDATIONS
+
+Ce rapport met en évidence une activité commerciale robuste avec une forte prédominance des produits de consommation courante (**Food and beverages**).
+
+### Points clés
+
+* **Saisonnalité :** L'activité culmine le week-end (Samedi et Dimanche).
+* **Segmentation :** Les femmes portent les rayons Mode et Alimentation, les hommes le Sport et la Santé.
+* **Levier :** La **Quantité** est le moteur principal du CA (Coefficient : 58.76).
+
+### Recommandations stratégiques
+
+1. **Augmenter le Volume :** Mettre en place des promotions de type "achat groupé" sur les accessoires électroniques.
+2. **Cross-Selling :** Placer des accessoires de mode (achat impulsif) à proximité du rayon "Alimentation".
+3. **Optimisation RH :** Renforcer les effectifs le Samedi pour gérer l'afflux client.
+
+```
+
+
